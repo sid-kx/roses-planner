@@ -86,11 +86,26 @@ onReady(async () => {
     const API_TOKEN = "roseplanner_2026_7f3c9a1b2d4e6f8a0c1e3b5a7d9f";
     const LOCAL_CACHE_KEY = 'roseRoomOrders';
 
+    // Apps Script web apps often redirect script.google.com -> script.googleusercontent.com.
+    // Some browsers may change POST to GET on redirect, so we cache the final resolved endpoint and POST to it.
+    const API_POST_URL_KEY = 'roseRoomApiPostUrl';
+    let API_POST_URL = localStorage.getItem(API_POST_URL_KEY) || API_URL;
+
     async function apiListOrders() {
         const res = await fetch(`${API_URL}?action=list&token=${encodeURIComponent(API_TOKEN)}`, {
             method: 'GET',
-            cache: 'no-store'
+            cache: 'no-store',
+            redirect: 'follow'
         });
+
+        // Cache resolved endpoint for POSTs (strip query params)
+        try {
+            const resolved = String(res.url || '');
+            if (resolved) {
+                API_POST_URL = resolved.split('?')[0];
+                localStorage.setItem(API_POST_URL_KEY, API_POST_URL);
+            }
+        } catch { /* ignore */ }
 
         const text = await res.text();
         let data;
@@ -106,10 +121,11 @@ onReady(async () => {
 
     async function apiUpsertOrder(order) {
         // IMPORTANT: use text/plain to avoid CORS preflight (Apps Script Web Apps often fail OPTIONS requests)
-        const res = await fetch(API_URL, {
+        const res = await fetch(API_POST_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify({ action: 'upsert', token: API_TOKEN, order })
+            body: JSON.stringify({ action: 'upsert', token: API_TOKEN, order }),
+            redirect: 'follow'
         });
 
         // Apps Script returns JSON text
@@ -484,7 +500,7 @@ onReady(async () => {
             renderCalendar();
         } catch (err) {
             console.error('Save failed:', err);
-            alert('Could not save to the online sheet. Please check your connection / permissions and try again.');
+            alert(`Could not save to the online sheet.\n\n${String(err && err.message ? err.message : err)}`);
         }
     });
 
