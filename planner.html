@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - The Rose Room</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+      .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+    <nav class="glass-nav">
+        <h1>The Rose Room Planner</h1>
+    </nav>
+
+    <div class="main-container dashboard-layout">
+        
+        <div class="action-bar">
+            <h2>Order Calendar</h2>
+            <button onclick="openModal()" class="btn-primary">+ New Order</button>
+        </div>
+
+        <section class="glass-card calendar-section" aria-label="Monthly order calendar">
+            <div class="calendar-header">
+                <div class="calendar-title">
+                    <h3 id="calendarMonthLabel">Month YYYY</h3>
+                    <p class="calendar-subtitle">Click a day to see orders</p>
+                </div>
+
+                <div class="calendar-controls" role="group" aria-label="Calendar controls">
+                    <button type="button" class="btn-secondary" id="prevMonthBtn" aria-label="Previous month">&#8592;</button>
+                    <button type="button" class="btn-secondary" id="todayBtn">Today</button>
+                    <button type="button" class="btn-secondary" id="nextMonthBtn" aria-label="Next month">&#8594;</button>
+                </div>
+            </div>
+
+            <div class="calendar-weekdays" aria-hidden="true">
+                <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+            </div>
+
+            <div class="month-calendar" id="monthCalendar" role="grid" aria-label="Calendar days">
+                <!-- JS renders day cells here -->
+            </div>
+
+            <div class="calendar-legend" aria-label="Calendar legend">
+                <span class="legend-item"><span class="legend-dot today-dot"></span> Today</span>
+                <span class="legend-item"><span class="legend-dot has-orders-dot"></span> Has orders</span>
+            </div>
+        </section>
+
+        <section class="glass-card day-orders-section" aria-label="Selected day orders">
+            <div class="day-orders-header">
+                <h3 id="selectedDateLabel">Select a day</h3>
+                <span class="pill" id="selectedDateCount">0 orders</span>
+            </div>
+            <div id="selectedDayOrders" class="day-orders-list">
+                <!-- JS fills in client names / order counts for the selected day -->
+            </div>
+        </section>
+
+        <div class="glass-card table-section">
+            <h3>Upcoming Orders</h3>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Client</th>
+                            <th>Details</th>
+                            <th>Type</th>
+                            <th>Total</th>
+                            <th>Due</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="upcomingTableBody">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="glass-card table-section">
+            <h3>Past Orders</h3>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Client</th>
+                            <th>Details</th>
+                            <th>Type</th>
+                            <th>Total</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pastTableBody">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="orderModal" class="modal hidden">
+        <div class="modal-content glass-card">
+            <button type="button" class="close-btn" onclick="closeModal()" aria-label="Close">&times;</button>
+            <h2 id="modalTitle">Add New Order</h2>
+            <form id="orderForm">
+                <input type="hidden" id="editIndex"> <div class="form-row">
+                    <div class="input-group">
+                        <label>Client Name</label>
+                        <input type="text" id="clientName" required>
+                    </div>
+                    <div class="input-group">
+                        <label>Date</label>
+                        <input type="date" id="orderDate" required>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="input-group">
+                        <label>Rose Count</label>
+                        <input type="number" id="bouquetSize" min="1" step="1" placeholder="e.g. 25" required>
+                    </div>
+                    <div class="input-group">
+                        <label>Type</label>
+                        <select id="orderType">
+                            <option>Pickup</option>
+                            <option>Delivery</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label>Bouquet Details</label>
+                    <textarea id="bouquetDetails" rows="2" placeholder="e.g. Red roses with baby's breath"></textarea>
+                </div>
+
+                <div class="form-row">
+                    <div class="input-group">
+                        <label>Total Price ($)</label>
+                        <input type="number" id="totalPrice" step="0.01" oninput="calcRemaining()" required>
+                    </div>
+                    <div class="input-group">
+                        <label>Amount Paid ($)</label>
+                        <input type="number" id="paidPrice" step="0.01" oninput="calcRemaining()" required>
+                    </div>
+                    <div class="input-group">
+                        <label>Amount Left ($)</label>
+                        <input type="number" id="amountLeft" readonly>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-primary">Save Order</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="js/script.js" defer></script>
+</body>
+</html>
