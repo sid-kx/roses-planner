@@ -430,6 +430,7 @@ onReady(async () => {
         const form = document.getElementById('orderForm');
         if (!modal || !form) return;
         modal.classList.remove('hidden');
+        document.body.classList.add('modal-open');
 
         if (editIndex !== null) {
             document.getElementById('modalTitle').innerText = "Edit Order";
@@ -456,6 +457,7 @@ onReady(async () => {
         if (!modal) return;
 
         modal.classList.add('hidden');
+        document.body.classList.remove('modal-open');
 
         const form = document.getElementById('orderForm');
         if (form) form.reset();
@@ -477,52 +479,78 @@ onReady(async () => {
     };
 
     const orderForm = document.getElementById('orderForm');
-    if (orderForm) orderForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
 
-        const editIdxRaw = document.getElementById('editIndex').value;
-        const isEdit = editIdxRaw !== "";
-        const editIdx = isEdit ? Number(editIdxRaw) : null;
+    // Mobile fix: if the Save button isn't a real submit button (type="button"), the form submit handler won't fire.
+    // Force a submit on click so iPhone/Android always save.
+    if (orderForm) {
+        const saveBtn =
+            document.getElementById('saveOrderBtn') ||
+            document.getElementById('saveOrder') ||
+            orderForm.querySelector('button[type="submit"], input[type="submit"], button');
 
-        // Preserve id/createdAt on edits
-        const existing = (isEdit && orders[editIdx]) ? orders[editIdx] : null;
+        if (saveBtn) {
+            saveBtn.addEventListener('click', (ev) => {
+                // If it's not a submit button, force submit
+                const btnType = (saveBtn.getAttribute('type') || '').toLowerCase();
+                if (btnType && btnType !== 'submit') {
+                    ev.preventDefault();
+                }
 
-        const newOrder = {
-            id: existing?.id || newId(),
-            client: document.getElementById('clientName').value.trim(),
-            date: document.getElementById('orderDate').value,
-            size: parseInt(document.getElementById('bouquetSize').value, 10),
-            type: document.getElementById('orderType').value,
-            details: document.getElementById('bouquetDetails').value.trim(),
-            total: parseFloat(document.getElementById('totalPrice').value) || 0,
-            paid: parseFloat(document.getElementById('paidPrice').value) || 0,
-            due: parseFloat(document.getElementById('amountLeft').value) || 0,
-            createdAt: existing?.createdAt || "",
-            updatedAt: ""
-        };
-
-        try {
-            // Save online
-            await apiUpsertOrder(newOrder);
-
-            // Update local state
-            if (isEdit) {
-                orders[editIdx] = newOrder;
-            } else {
-                orders.push(newOrder);
-            }
-
-            // Update local cache
-            localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(orders));
-
-            closeModal();
-            renderTables();
-            renderCalendar();
-        } catch (err) {
-            console.error('Save failed:', err);
-            alert(`Could not save to the online sheet.\n\n${String(err && err.message ? err.message : err)}`);
+                if (typeof orderForm.requestSubmit === 'function') {
+                    orderForm.requestSubmit();
+                } else {
+                    orderForm.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                }
+            });
         }
-    });
+
+        orderForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const editIdxRaw = document.getElementById('editIndex').value;
+            const isEdit = editIdxRaw !== "";
+            const editIdx = isEdit ? Number(editIdxRaw) : null;
+
+            // Preserve id/createdAt on edits
+            const existing = (isEdit && orders[editIdx]) ? orders[editIdx] : null;
+
+            const newOrder = {
+                id: existing?.id || newId(),
+                client: document.getElementById('clientName').value.trim(),
+                date: document.getElementById('orderDate').value,
+                size: parseInt(document.getElementById('bouquetSize').value, 10),
+                type: document.getElementById('orderType').value,
+                details: document.getElementById('bouquetDetails').value.trim(),
+                total: parseFloat(document.getElementById('totalPrice').value) || 0,
+                paid: parseFloat(document.getElementById('paidPrice').value) || 0,
+                due: parseFloat(document.getElementById('amountLeft').value) || 0,
+                createdAt: existing?.createdAt || "",
+                updatedAt: ""
+            };
+
+            try {
+                // Save online
+                await apiUpsertOrder(newOrder);
+
+                // Update local state
+                if (isEdit) {
+                    orders[editIdx] = newOrder;
+                } else {
+                    orders.push(newOrder);
+                }
+
+                // Update local cache
+                localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(orders));
+
+                closeModal();
+                renderTables();
+                renderCalendar();
+            } catch (err) {
+                console.error('Save failed:', err);
+                alert(`Could not save to the online sheet.\n\n${String(err && err.message ? err.message : err)}`);
+            }
+        });
+    }
 
     // FINAL init for planner page
     wireCalendarControls();
