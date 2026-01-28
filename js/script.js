@@ -91,18 +91,36 @@ onReady(async () => {
             method: 'GET',
             cache: 'no-store'
         });
-        const data = await res.json();
+
+        const text = await res.text();
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch {
+            throw new Error(`Non-JSON response from server: ${text.slice(0, 120)}`);
+        }
+
         if (!data.ok) throw new Error(data.error || 'Failed to list orders');
         return Array.isArray(data.orders) ? data.orders : [];
     }
 
     async function apiUpsertOrder(order) {
+        // IMPORTANT: use text/plain to avoid CORS preflight (Apps Script Web Apps often fail OPTIONS requests)
         const res = await fetch(API_URL, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
             body: JSON.stringify({ action: 'upsert', token: API_TOKEN, order })
         });
-        const data = await res.json();
+
+        // Apps Script returns JSON text
+        const text = await res.text();
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch {
+            throw new Error(`Non-JSON response from server: ${text.slice(0, 120)}`);
+        }
+
         if (!data.ok) throw new Error(data.error || 'Failed to save order');
         return true;
     }
