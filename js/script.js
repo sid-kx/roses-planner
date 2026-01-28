@@ -23,7 +23,7 @@ function onReady(fn) {
     }
 }
 
-onReady(() => {
+onReady(async () => {
     // Detect page by DOM instead of relying on filenames (works for file://, Live Server, renames, etc.)
     const hasPlannerUI = !!(
         document.getElementById('monthCalendar') ||
@@ -79,13 +79,83 @@ onReady(() => {
     }
 
     // State
-    let orders = JSON.parse(localStorage.getItem('roseRoomOrders')) || [];
+    let orders = [];
+
+    // --- Google Sheets (Apps Script Web App) Sync ---
+    const API_URL = "https://script.google.com/macros/s/AKfycbwldHSxSeAYigHWgDHz6mTQkJQ4k0gXk0EBBQAIEG8ozwURoOywxae781CO32b9ldtx/exec";
+    const API_TOKEN = "roseplanner_2026_7f3c9a1b2d4e6f8a0c1e3b5a7d9f";
+    const LOCAL_CACHE_KEY = 'roseRoomOrders';
+
+    async function apiListOrders() {
+        const res = await fetch(`${API_URL}?action=list&token=${encodeURIComponent(API_TOKEN)}`, {
+            method: 'GET',
+            cache: 'no-store'
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || 'Failed to list orders');
+        return Array.isArray(data.orders) ? data.orders : [];
+    }
+
+    async function apiUpsertOrder(order) {
+        const res = await fetch(API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'upsert', token: API_TOKEN, order })
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || 'Failed to save order');
+        return true;
+    }
+
+    // Basic normalizer (Sheets may return numbers as strings)
+    function normalizeOrder(o) {
+        return {
+            id: String(o.id || ''),
+            date: String(o.date || ''),
+            client: String(o.client || ''),
+            size: Number(o.size || 0),
+            type: String(o.type || ''),
+            details: String(o.details || ''),
+            total: Number(o.total || 0),
+            paid: Number(o.paid || 0),
+            due: Number(o.due || 0),
+            createdAt: String(o.createdAt || ''),
+            updatedAt: String(o.updatedAt || '')
+        };
+    }
+
+    function newId() {
+        // Prefer crypto UUID when available
+        if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+            return window.crypto.randomUUID();
+        }
+        return `ord_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    }
+
+    async function loadOrders() {
+        // 1) Try online first
+        try {
+            const remote = await apiListOrders();
+            orders = remote.map(normalizeOrder).filter(o => o.id && o.date);
+            localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(orders));
+            return;
+        } catch (err) {
+            console.warn('Online sync failed, using local cache:', err);
+        }
+
+        // 2) Fallback to local cache
+        try {
+            orders = JSON.parse(localStorage.getItem(LOCAL_CACHE_KEY)) || [];
+        } catch {
+            orders = [];
+        }
+    }
 
     // Render Tables
     function renderTables() {
         const upcomingBody = document.getElementById('upcomingTableBody');
         const pastBody = document.getElementById('pastTableBody');
-        const today = new Date().toISOString().split('T')[0];
+        const today = toISODate(new Date());
 
         if (!upcomingBody || !pastBody) return;
 
@@ -211,7 +281,7 @@ onReady(() => {
         const gridEl = document.getElementById('monthCalendar');
         if (!monthLabel || !gridEl) return;
 
-        const todayISO = new Date().toISOString().split('T')[0];
+        const todayISO = toISODate(new Date());
 
         monthLabel.textContent = `${monthNames[viewMonth]} ${viewYear}`;
         const cells = getMonthGrid(viewYear, viewMonth);
@@ -262,7 +332,7 @@ onReady(() => {
         const now = new Date();
         viewYear = now.getFullYear();
         viewMonth = now.getMonth();
-        selectedDateStr = now.toISOString().split('T')[0];
+        selectedDateStr = toISODate(now);
         renderCalendar();
     }
 
@@ -353,36 +423,56 @@ onReady(() => {
     };
 
     const orderForm = document.getElementById('orderForm');
-    if (orderForm) orderForm.addEventListener('submit', (e) => {
+    if (orderForm) orderForm.addEventListener('submit', async (e) => {
         e.preventDefault();
 
+        const editIdxRaw = document.getElementById('editIndex').value;
+        const isEdit = editIdxRaw !== "";
+        const editIdx = isEdit ? Number(editIdxRaw) : null;
+
+        // Preserve id/createdAt on edits
+        const existing = (isEdit && orders[editIdx]) ? orders[editIdx] : null;
+
         const newOrder = {
-            client: document.getElementById('clientName').value,
+            id: existing?.id || newId(),
+            client: document.getElementById('clientName').value.trim(),
             date: document.getElementById('orderDate').value,
             size: parseInt(document.getElementById('bouquetSize').value, 10),
             type: document.getElementById('orderType').value,
-            details: document.getElementById('bouquetDetails').value,
-            total: parseFloat(document.getElementById('totalPrice').value),
-            paid: parseFloat(document.getElementById('paidPrice').value),
-            due: parseFloat(document.getElementById('amountLeft').value)
+            details: document.getElementById('bouquetDetails').value.trim(),
+            total: parseFloat(document.getElementById('totalPrice').value) || 0,
+            paid: parseFloat(document.getElementById('paidPrice').value) || 0,
+            due: parseFloat(document.getElementById('amountLeft').value) || 0,
+            createdAt: existing?.createdAt || "",
+            updatedAt: ""
         };
 
-        const editIdx = document.getElementById('editIndex').value;
+        try {
+            // Save online
+            await apiUpsertOrder(newOrder);
 
-        if (editIdx !== "") {
-            orders[editIdx] = newOrder;
-        } else {
-            orders.push(newOrder);
+            // Update local state
+            if (isEdit) {
+                orders[editIdx] = newOrder;
+            } else {
+                orders.push(newOrder);
+            }
+
+            // Update local cache
+            localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(orders));
+
+            closeModal();
+            renderTables();
+            renderCalendar();
+        } catch (err) {
+            console.error('Save failed:', err);
+            alert('Could not save to the online sheet. Please check your connection / permissions and try again.');
         }
-
-        localStorage.setItem('roseRoomOrders', JSON.stringify(orders));
-        closeModal();
-        renderTables();
-        renderCalendar();
     });
 
     // FINAL init for planner page
     wireCalendarControls();
+    await loadOrders();
     setViewToToday();
     renderTables();
 });

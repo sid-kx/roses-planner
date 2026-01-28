@@ -611,44 +611,193 @@ tbody tr:hover td {
 /* Responsive */
 @media (max-width: 720px) {
     body {
-        padding-top: 86px;
+        padding-top: 82px;
     }
 
-    .glass-card {
-        padding: 22px;
+    .main-container {
+        width: 94%;
+        padding: 14px 0 32px;
+    }
+
+    .glass-nav {
+        top: 14px;
+        padding: 12px 16px;
         border-radius: 20px;
     }
 
+    .glass-nav h1 {
+        font-size: 1.18rem;
+    }
+
+    .glass-card {
+        padding: 18px;
+        border-radius: 20px;
+    }
+
+    /* Headings tighten */
+    .action-bar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+
+    .action-bar h2 {
+        font-size: 1.18rem;
+        line-height: 1.2;
+    }
+
+    .action-bar .btn-primary {
+        width: 100%;
+        padding: 12px 16px;
+        border-radius: 16px;
+    }
+
+    /* Forms */
     .form-row {
         flex-direction: column;
+    }
+
+    input, select, textarea {
+        padding: 12px 12px;
+        border-radius: 14px;
+    }
+
+    /* Calendar header layout */
+    .calendar-section {
+        padding: 18px;
+    }
+
+    .calendar-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        margin-bottom: 12px;
+    }
+
+    .calendar-title h3 {
+        font-size: 1.22rem;
+    }
+
+    .calendar-subtitle {
+        font-size: 0.92rem;
+    }
+
+    .calendar-controls {
+        width: 100%;
+        display: grid;
+        grid-template-columns: 1fr 1.2fr 1fr;
+        gap: 10px;
+    }
+
+    .btn-secondary {
+        width: 100%;
+        padding: 12px 14px;
+        border-radius: 16px;
+    }
+
+    /* Weekday labels */
+    .calendar-weekdays {
+        gap: 8px;
+    }
+
+    .calendar-weekdays > div {
+        font-size: 0.82rem;
+        letter-spacing: 0.2px;
+        opacity: 0.95;
+    }
+
+    /* Calendar grid */
+    .month-calendar {
+        gap: 8px;
+    }
+
+    /* Hide order count + client preview on mobile */
+    .day-meta {
+        display: none;
+    }
+
+    .day-cell {
+        min-height: 64px;
+        padding: 12px;
+        border-radius: 16px;
+        display: flex;
+        align-items: flex-start;
+        justify-content: flex-start;
+        box-shadow: 0 8px 18px rgba(255, 143, 163, 0.10);
+    }
+
+    .day-cell:hover {
+        transform: none;
+    }
+
+    .day-num {
+        font-size: 1.08rem;
+    }
+
+    .day-cell.is-outside {
+        opacity: 0.28;
+    }
+
+    .day-cell.today {
+        background: rgba(255, 143, 163, 0.08);
+        border-color: rgba(224, 94, 116, 0.55);
+    }
+
+    .day-cell.is-selected {
+        box-shadow: 0 14px 28px rgba(224, 94, 116, 0.14);
+        border-color: rgba(224, 94, 116, 0.50);
+    }
+
+    .day-cell.has-orders::after {
+        top: 10px;
+        right: 10px;
+        width: 9px;
+        height: 9px;
+        box-shadow: 0 6px 12px rgba(255, 143, 163, 0.22);
+    }
+
+    .calendar-legend {
+        gap: 12px;
+        margin-top: 12px;
+    }
+
+    /* Selected day panel spacing */
+    .day-orders-section {
+        padding: 18px;
+    }
+
+    .day-orders-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .pill {
+        padding: 9px 12px;
+        border-radius: 999px;
+    }
+
+    .order-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    /* Tables: comfortable mobile scroll */
+    .table-section {
+        margin-bottom: 18px;
     }
 
     th, td {
         padding: 10px;
         font-size: 0.92rem;
+        white-space: nowrap;
     }
 
-    .calendar-header {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-
-    .calendar-controls {
-        width: 100%;
-    }
-
-    .month-calendar {
-        gap: 8px;
-    }
-
-    .day-cell {
-        min-height: 82px;
-        padding: 10px;
+    .table-responsive {
+        -webkit-overflow-scrolling: touch;
         border-radius: 16px;
-    }
-
-    .calendar-weekdays {
-        gap: 8px;
     }
 }
 
