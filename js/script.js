@@ -23,7 +23,7 @@ function onReady(fn) {
     }
 }
 
-onReady(async () => {
+onReady(() => {
     // Detect page by DOM instead of relying on filenames (works for file://, Live Server, renames, etc.)
     const hasPlannerUI = !!(
         document.getElementById('monthCalendar') ||
@@ -81,101 +81,8 @@ onReady(async () => {
     // State
     let orders = [];
 
-    // --- Google Sheets (Apps Script Web App) Sync ---
-    const API_URL = "https://script.google.com/macros/s/AKfycbybE8WSURAjM3v8nLWf9HRqKo1k3oCa3reZk72YBXbDPz7ZuDpqVRuwPmpOzeAbNnNn/exec";
-    const API_TOKEN = "roseplanner_2026_7f3c9a1b2d4e6f8a0c1e3b5a7d9f";
-    const LOCAL_CACHE_KEY = 'roseRoomOrders';
-
-    // --- JSONP helper (bypasses CORS for Apps Script from GitHub Pages/custom domains) ---
-    function jsonp(url, timeoutMs = 12000) {
-        return new Promise((resolve, reject) => {
-            const cb = `__rr_cb_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-            const sep = url.includes('?') ? '&' : '?';
-            const full = `${url}${sep}callback=${cb}`;
-
-            const script = document.createElement('script');
-            let done = false;
-
-            const timer = setTimeout(() => {
-                if (done) return;
-                done = true;
-                cleanup();
-                reject(new Error('JSONP timeout'));
-            }, timeoutMs);
-
-            function cleanup() {
-                clearTimeout(timer);
-                try { delete window[cb]; } catch {}
-                if (script.parentNode) script.parentNode.removeChild(script);
-            }
-
-            window[cb] = (data) => {
-                if (done) return;
-                done = true;
-                cleanup();
-                resolve(data);
-            };
-
-            script.onerror = () => {
-                if (done) return;
-                done = true;
-                cleanup();
-                reject(new Error('JSONP failed to load'));
-            };
-
-            script.src = full;
-            document.body.appendChild(script);
-        });
-    }
-
-    async function apiListOrders() {
-        const data = await jsonp(`${API_URL}?action=list&token=${encodeURIComponent(API_TOKEN)}`);
-        if (!data || !data.ok) throw new Error((data && data.error) || 'Failed to list orders');
-        return Array.isArray(data.orders) ? data.orders : [];
-    }
-
-    async function apiUpsertOrder(order) {
-        const encodedOrder = encodeURIComponent(JSON.stringify(order));
-        const data = await jsonp(`${API_URL}?action=upsert&token=${encodeURIComponent(API_TOKEN)}&order=${encodedOrder}`);
-        if (!data || !data.ok) throw new Error((data && data.error) || 'Failed to save order');
-        return true;
-    }
-
-    // Basic normalizer (Sheets may return numbers as strings)
-    // Sheets can return dates in different formats (Date objects serialized, ISO with time, or human-readable strings).
-    // The UI expects YYYY-MM-DD everywhere.
-    function normalizeDateValue(v) {
-        if (!v) return '';
-        const s = String(v).trim();
-
-        // Already YYYY-MM-DD
-        if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-
-        // ISO with time (e.g. 2026-02-07T00:00:00.000Z)
-        if (/^\d{4}-\d{2}-\d{2}T/.test(s)) return s.slice(0, 10);
-
-        // Try parsing other string formats
-        const d = new Date(s);
-        if (!Number.isNaN(d.getTime())) return toISODate(d);
-
-        // As a last resort, return original string
-        return s;
-    }
-    function normalizeOrder(o) {
-        return {
-            id: String(o.id || ''),
-            date: normalizeDateValue(o.date),
-            client: String(o.client || ''),
-            size: Number(String(o.size ?? '0').trim() || 0),
-            type: String(o.type || ''),
-            details: String(o.details || ''),
-            total: Number(String(o.total ?? '0').trim() || 0),
-            paid: Number(String(o.paid ?? '0').trim() || 0),
-            due: Number(String(o.due ?? '0').trim() || 0),
-            createdAt: String(o.createdAt || ''),
-            updatedAt: String(o.updatedAt || '')
-        };
-    }
+    // --- Local per-device storage (no cloud sync) ---
+    const STORAGE_KEY = 'roseRoomOrders';
 
     function newId() {
         // Prefer crypto UUID when available
@@ -185,24 +92,35 @@ onReady(async () => {
         return `ord_${Date.now()}_${Math.random().toString(16).slice(2)}`;
     }
 
-    async function loadOrders() {
-        // 1) Try online first
+    function loadOrdersFromLocal() {
         try {
-            const remote = await apiListOrders();
-            orders = remote.map(normalizeOrder).filter(o => o.id && o.date);
-            orders.sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.id).localeCompare(String(b.id)));
-            localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(orders));
-            return;
-        } catch (err) {
-            console.warn('Online sync failed, using local cache:', err);
-        }
-
-        // 2) Fallback to local cache
-        try {
-            orders = JSON.parse(localStorage.getItem(LOCAL_CACHE_KEY)) || [];
+            const raw = localStorage.getItem(STORAGE_KEY);
+            orders = raw ? JSON.parse(raw) : [];
+            if (!Array.isArray(orders)) orders = [];
         } catch {
             orders = [];
         }
+
+        // Normalize minimal fields the UI expects
+        orders = orders.map(o => ({
+            id: String(o.id || newId()),
+            date: String(o.date || ''),
+            client: String(o.client || ''),
+            size: Number(o.size || 0),
+            type: String(o.type || ''),
+            details: String(o.details || ''),
+            total: Number(o.total || 0),
+            paid: Number(o.paid || 0),
+            due: Number(o.due || 0),
+            createdAt: String(o.createdAt || ''),
+            updatedAt: String(o.updatedAt || '')
+        })).filter(o => o.date);
+
+        orders.sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.id).localeCompare(String(b.id)));
+    }
+
+    function saveOrdersToLocal() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(orders));
     }
 
     // Render Tables
@@ -504,7 +422,7 @@ onReady(async () => {
             });
         }
 
-        orderForm.addEventListener('submit', async (e) => {
+        orderForm.addEventListener('submit', (e) => {
             e.preventDefault();
 
             const editIdxRaw = document.getElementById('editIndex').value;
@@ -528,33 +446,25 @@ onReady(async () => {
                 updatedAt: ""
             };
 
-            try {
-                // Save online
-                await apiUpsertOrder(newOrder);
-
-                // Update local state
-                if (isEdit) {
-                    orders[editIdx] = newOrder;
-                } else {
-                    orders.push(newOrder);
-                }
-
-                // Update local cache
-                localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(orders));
-
-                closeModal();
-                renderTables();
-                renderCalendar();
-            } catch (err) {
-                console.error('Save failed:', err);
-                alert(`Could not save to the online sheet.\n\n${String(err && err.message ? err.message : err)}`);
+            // Update local state
+            if (isEdit) {
+                orders[editIdx] = newOrder;
+            } else {
+                orders.push(newOrder);
             }
+
+            // Update local cache
+            saveOrdersToLocal();
+
+            closeModal();
+            renderTables();
+            renderCalendar();
         });
     }
 
     // FINAL init for planner page
     wireCalendarControls();
-    await loadOrders();
+    loadOrdersFromLocal();
     setViewToToday();
     renderTables();
 });
