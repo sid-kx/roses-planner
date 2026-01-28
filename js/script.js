@@ -82,62 +82,62 @@ onReady(async () => {
     let orders = [];
 
     // --- Google Sheets (Apps Script Web App) Sync ---
-    const API_URL = "https://script.google.com/macros/s/AKfycbwldHSxSeAYigHWgDHz6mTQkJQ4k0gXk0EBBQAIEG8ozwURoOywxae781CO32b9ldtx/exec";
+    const API_URL = "https://script.google.com/macros/s/AKfycbybE8WSURAjM3v8nLWf9HRqKo1k3oCa3reZk72YBXbDPz7ZuDpqVRuwPmpOzeAbNnNn/exec";
     const API_TOKEN = "roseplanner_2026_7f3c9a1b2d4e6f8a0c1e3b5a7d9f";
     const LOCAL_CACHE_KEY = 'roseRoomOrders';
 
-    // Apps Script web apps often redirect script.google.com -> script.googleusercontent.com.
-    // Some browsers may change POST to GET on redirect, so we cache the final resolved endpoint and POST to it.
-    const API_POST_URL_KEY = 'roseRoomApiPostUrl';
-    let API_POST_URL = localStorage.getItem(API_POST_URL_KEY) || API_URL;
+    // --- JSONP helper (bypasses CORS for Apps Script from GitHub Pages/custom domains) ---
+    function jsonp(url, timeoutMs = 12000) {
+        return new Promise((resolve, reject) => {
+            const cb = `__rr_cb_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+            const sep = url.includes('?') ? '&' : '?';
+            const full = `${url}${sep}callback=${cb}`;
+
+            const script = document.createElement('script');
+            let done = false;
+
+            const timer = setTimeout(() => {
+                if (done) return;
+                done = true;
+                cleanup();
+                reject(new Error('JSONP timeout'));
+            }, timeoutMs);
+
+            function cleanup() {
+                clearTimeout(timer);
+                try { delete window[cb]; } catch {}
+                if (script.parentNode) script.parentNode.removeChild(script);
+            }
+
+            window[cb] = (data) => {
+                if (done) return;
+                done = true;
+                cleanup();
+                resolve(data);
+            };
+
+            script.onerror = () => {
+                if (done) return;
+                done = true;
+                cleanup();
+                reject(new Error('JSONP failed to load'));
+            };
+
+            script.src = full;
+            document.body.appendChild(script);
+        });
+    }
 
     async function apiListOrders() {
-        const res = await fetch(`${API_URL}?action=list&token=${encodeURIComponent(API_TOKEN)}`, {
-            method: 'GET',
-            cache: 'no-store',
-            redirect: 'follow'
-        });
-
-        // Cache resolved endpoint for POSTs (strip query params)
-        try {
-            const resolved = String(res.url || '');
-            if (resolved) {
-                API_POST_URL = resolved.split('?')[0];
-                localStorage.setItem(API_POST_URL_KEY, API_POST_URL);
-            }
-        } catch { /* ignore */ }
-
-        const text = await res.text();
-        let data;
-        try {
-            data = JSON.parse(text);
-        } catch {
-            throw new Error(`Non-JSON response from server: ${text.slice(0, 120)}`);
-        }
-
-        if (!data.ok) throw new Error(data.error || 'Failed to list orders');
+        const data = await jsonp(`${API_URL}?action=list&token=${encodeURIComponent(API_TOKEN)}`);
+        if (!data || !data.ok) throw new Error((data && data.error) || 'Failed to list orders');
         return Array.isArray(data.orders) ? data.orders : [];
     }
 
     async function apiUpsertOrder(order) {
-        // IMPORTANT: use text/plain to avoid CORS preflight (Apps Script Web Apps often fail OPTIONS requests)
-        const res = await fetch(API_POST_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify({ action: 'upsert', token: API_TOKEN, order }),
-            redirect: 'follow'
-        });
-
-        // Apps Script returns JSON text
-        const text = await res.text();
-        let data;
-        try {
-            data = JSON.parse(text);
-        } catch {
-            throw new Error(`Non-JSON response from server: ${text.slice(0, 120)}`);
-        }
-
-        if (!data.ok) throw new Error(data.error || 'Failed to save order');
+        const encodedOrder = encodeURIComponent(JSON.stringify(order));
+        const data = await jsonp(`${API_URL}?action=upsert&token=${encodeURIComponent(API_TOKEN)}&order=${encodedOrder}`);
+        if (!data || !data.ok) throw new Error((data && data.error) || 'Failed to save order');
         return true;
     }
 
@@ -225,7 +225,7 @@ onReady(async () => {
 
     let viewYear = new Date().getFullYear();
     let viewMonth = new Date().getMonth(); // 0-11
-    let selectedDateStr = new Date().toISOString().split('T')[0];
+    let selectedDateStr = toISODate(new Date());
 
     function pad2(n) {
         return String(n).padStart(2, '0');
