@@ -142,17 +142,36 @@ onReady(async () => {
     }
 
     // Basic normalizer (Sheets may return numbers as strings)
+    // Sheets can return dates in different formats (Date objects serialized, ISO with time, or human-readable strings).
+    // The UI expects YYYY-MM-DD everywhere.
+    function normalizeDateValue(v) {
+        if (!v) return '';
+        const s = String(v).trim();
+
+        // Already YYYY-MM-DD
+        if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+
+        // ISO with time (e.g. 2026-02-07T00:00:00.000Z)
+        if (/^\d{4}-\d{2}-\d{2}T/.test(s)) return s.slice(0, 10);
+
+        // Try parsing other string formats
+        const d = new Date(s);
+        if (!Number.isNaN(d.getTime())) return toISODate(d);
+
+        // As a last resort, return original string
+        return s;
+    }
     function normalizeOrder(o) {
         return {
             id: String(o.id || ''),
-            date: String(o.date || ''),
+            date: normalizeDateValue(o.date),
             client: String(o.client || ''),
-            size: Number(o.size || 0),
+            size: Number(String(o.size ?? '0').trim() || 0),
             type: String(o.type || ''),
             details: String(o.details || ''),
-            total: Number(o.total || 0),
-            paid: Number(o.paid || 0),
-            due: Number(o.due || 0),
+            total: Number(String(o.total ?? '0').trim() || 0),
+            paid: Number(String(o.paid ?? '0').trim() || 0),
+            due: Number(String(o.due ?? '0').trim() || 0),
             createdAt: String(o.createdAt || ''),
             updatedAt: String(o.updatedAt || '')
         };
@@ -171,6 +190,7 @@ onReady(async () => {
         try {
             const remote = await apiListOrders();
             orders = remote.map(normalizeOrder).filter(o => o.id && o.date);
+            orders.sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.id).localeCompare(String(b.id)));
             localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(orders));
             return;
         } catch (err) {
