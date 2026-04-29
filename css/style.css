@@ -636,7 +636,9 @@ body.modal-open {
     }
 
     .glass-nav h1 {
-        font-size: 1.18rem;
+        font-size: 0.95rem;
+        letter-spacing: 0.2px;
+        line-height: 1.1;
     }
 
     .glass-card {
