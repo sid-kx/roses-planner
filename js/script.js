@@ -491,22 +491,25 @@ onReady(() => {
 
         if (saveBtn) {
             saveBtn.addEventListener('click', (ev) => {
-                // If it's not a submit button, force submit
                 const btnType = (saveBtn.getAttribute('type') || '').toLowerCase();
+
+                // Normal submit buttons already trigger the form submit event.
+                // Only force-submit if the button is explicitly NOT a submit button.
                 if (btnType && btnType !== 'submit') {
                     ev.preventDefault();
-                }
 
-                if (typeof orderForm.requestSubmit === 'function') {
-                    orderForm.requestSubmit();
-                } else {
-                    orderForm.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                    if (typeof orderForm.requestSubmit === 'function') {
+                        orderForm.requestSubmit();
+                    } else {
+                        orderForm.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                    }
                 }
             });
         }
 
         orderForm.addEventListener('submit', async (e) => {
             e.preventDefault();
+            console.log('Submit fired');
 
             const editIdxRaw = document.getElementById('editIndex').value;
             const isEdit = editIdxRaw !== "";
@@ -529,6 +532,7 @@ onReady(() => {
                 updatedAt: ""
             };
 
+            console.log('Trying to save order:', newOrder);
             const savedOrder = await saveOrderToSupabase(newOrder);
 
             if (!savedOrder) return;
@@ -546,6 +550,13 @@ onReady(() => {
         if (!allowed) return;
 
         wireCalendarControls();
+
+        if (typeof loadOrdersFromSupabase !== 'function') {
+            console.error('loadOrdersFromSupabase is missing. Your browser is probably loading an old cached script.js file. Hard refresh the page or bump the script version in planner.html.');
+            alert('The planner loaded an old cached script file. Hard refresh the page, then try again.');
+            return;
+        }
+
         await loadOrdersFromSupabase();
         setViewToToday();
         renderTables();
