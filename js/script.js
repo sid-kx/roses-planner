@@ -115,46 +115,95 @@ onReady(() => {
     // State
     let orders = [];
 
-    // --- Local per-device storage (no cloud sync) ---
-    const STORAGE_KEY = 'roseRoomOrders';
-
-    function newId() {
-        // Prefer crypto UUID when available
-        if (window.crypto && typeof window.crypto.randomUUID === 'function') {
-            return window.crypto.randomUUID();
-        }
-        return `ord_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-    }
-
-    function loadOrdersFromLocal() {
-        try {
-            const raw = localStorage.getItem(STORAGE_KEY);
-            orders = raw ? JSON.parse(raw) : [];
-            if (!Array.isArray(orders)) orders = [];
-        } catch {
-            orders = [];
-        }
-
-        // Normalize minimal fields the UI expects
-        orders = orders.map(o => ({
-            id: String(o.id || newId()),
-            date: String(o.date || ''),
-            client: String(o.client || ''),
+    // --- Supabase cloud storage ---
+    function mapSupabaseOrder(o) {
+        return {
+            id: o.id,
+            date: o.date,
+            client: o.client || '',
             size: Number(o.size || 0),
-            type: String(o.type || ''),
-            details: String(o.details || ''),
+            type: o.type || '',
+            details: o.details || '',
             total: Number(o.total || 0),
             paid: Number(o.paid || 0),
             due: Number(o.due || 0),
-            createdAt: String(o.createdAt || ''),
-            updatedAt: String(o.updatedAt || '')
-        })).filter(o => o.date);
+            createdAt: o.created_at || '',
+            updatedAt: o.updated_at || ''
+        };
+    }
+
+    async function loadOrdersFromSupabase() {
+        const { data, error } = await supabaseClient
+            .from('orders')
+            .select('*')
+            .order('date', { ascending: true });
+
+        if (error) {
+            console.error('Error loading orders:', error);
+            alert('Could not load orders. Check Supabase table/policies.');
+            orders = [];
+            return;
+        }
+
+        orders = (data || [])
+            .map(mapSupabaseOrder)
+            .filter(o => o.date);
 
         orders.sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.id).localeCompare(String(b.id)));
     }
 
-    function saveOrdersToLocal() {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(orders));
+    async function saveOrderToSupabase(order) {
+        const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession();
+        const user = sessionData?.session?.user;
+
+        if (sessionError || !user) {
+            alert('You must be logged in to save orders.');
+            window.location.href = 'index.html';
+            return null;
+        }
+
+        const orderData = {
+            user_id: user.id,
+            client: order.client,
+            date: order.date,
+            size: order.size,
+            type: order.type,
+            details: order.details,
+            total: order.total,
+            paid: order.paid,
+            due: order.due
+        };
+
+        if (order.id) {
+            const { data, error } = await supabaseClient
+                .from('orders')
+                .update(orderData)
+                .eq('id', order.id)
+                .select()
+                .single();
+
+            if (error) {
+                console.error('Error updating order:', error);
+                alert(`Could not update order: ${error.message}`);
+                return null;
+            }
+
+            return data;
+        }
+
+        const { data, error } = await supabaseClient
+            .from('orders')
+            .insert(orderData)
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Error saving order:', error);
+            alert(`Could not save order: ${error.message}`);
+            return null;
+        }
+
+        return data;
     }
 
     // Render Tables
@@ -467,7 +516,7 @@ onReady(() => {
             const existing = (isEdit && orders[editIdx]) ? orders[editIdx] : null;
 
             const newOrder = {
-                id: existing?.id || newId(),
+                id: existing?.id || null,
                 client: document.getElementById('clientName').value.trim(),
                 date: document.getElementById('orderDate').value,
                 size: parseInt(document.getElementById('bouquetSize').value, 10),
