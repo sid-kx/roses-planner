@@ -1,6 +1,8 @@
-// Credentials
-const USER = "aikam.bhinder12";
-const PASS = "121209";
+// Supabase setup
+const SUPABASE_URL = "https://zsohiwpwfeburwcilhpk.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpzb2hpd3B3ZmVidXJ3Y2lsaHBrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0NzEwNDYsImV4cCI6MjA5MzA0NzA0Nn0.zu_E75L4aa-Wc_1G6Y3NNDQ3bx4BqHj7FHyjEG7tVLY";
+
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 function getInputValue(possibleIds, possibleNames) {
     for (const id of possibleIds) {
@@ -40,42 +42,74 @@ onReady(() => {
     // --- Login Logic ---
     if (isLogin) {
         const loginForm = document.getElementById('loginForm');
-        if (loginForm) {
-            loginForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                const u = getInputValue(['username', 'user', 'login-username', 'email'], ['username', 'user', 'email']);
-                const p = getInputValue(['password', 'pass', 'login-password'], ['password', 'pass']);
 
-                if (u === null || p === null) {
-                    console.error('Login inputs not found. Expected ids like #username/#password or name="username"/name="password".');
-                    alert('Login inputs not found. Check your input IDs (username/password) in index.html.');
+        // If already logged in, send to planner
+        supabaseClient.auth.getSession().then(({ data }) => {
+            if (data.session) {
+                window.location.href = 'planner.html';
+            }
+        });
+
+        if (loginForm) {
+            loginForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+
+                const email = document.getElementById('email')?.value.trim();
+                const password = document.getElementById('password')?.value;
+
+                if (!email || !password) {
+                    alert('Enter your email and password.');
                     return;
                 }
 
-                console.log('Entered username:', u);
-                console.log('Entered password length:', String(p).length);
+                const { data, error } = await supabaseClient.auth.signInWithPassword({
+                    email,
+                    password
+                });
 
-                if (u === USER && p === PASS) {
-                    // Set session flag
-                    sessionStorage.setItem('isLoggedIn', 'true');
-                    window.location.href = 'planner.html';
-                } else {
+                if (error) {
                     const err = document.getElementById('error-msg');
-                    if (err) err.classList.remove('hidden');
-                    else alert('Wrong username or password');
+                    if (err) {
+                        err.textContent = 'Invalid email or password';
+                        err.classList.remove('hidden');
+                    } else {
+                        alert('Invalid email or password');
+                    }
+                    return;
+                }
+
+                if (data.session) {
+                    window.location.href = 'planner.html';
                 }
             });
         }
+
         return; // stop here on login page
     }
 
     // --- Planner Logic ---
     if (!isPlanner) return;
 
-    // Security Check
-    if (sessionStorage.getItem('isLoggedIn') !== 'true') {
-        window.location.href = 'index.html';
-        return;
+    // Real Supabase Auth Check
+    async function protectPlannerPage() {
+        const { data, error } = await supabaseClient.auth.getSession();
+
+        if (error || !data.session) {
+            window.location.href = 'index.html';
+            return false;
+        }
+
+        return true;
+    }
+
+    // Logout Logic
+    const logoutBtn = document.getElementById('logoutBtn');
+
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', async () => {
+            await supabaseClient.auth.signOut();
+            window.location.href = 'index.html';
+        });
     }
 
     // State
@@ -422,7 +456,7 @@ onReady(() => {
             });
         }
 
-        orderForm.addEventListener('submit', (e) => {
+        orderForm.addEventListener('submit', async (e) => {
             e.preventDefault();
 
             const editIdxRaw = document.getElementById('editIndex').value;
@@ -446,15 +480,11 @@ onReady(() => {
                 updatedAt: ""
             };
 
-            // Update local state
-            if (isEdit) {
-                orders[editIdx] = newOrder;
-            } else {
-                orders.push(newOrder);
-            }
+            const savedOrder = await saveOrderToSupabase(newOrder);
 
-            // Update local cache
-            saveOrdersToLocal();
+            if (!savedOrder) return;
+
+            await loadOrdersFromSupabase();
 
             closeModal();
             renderTables();
@@ -462,9 +492,13 @@ onReady(() => {
         });
     }
 
-    // FINAL init for planner page
-    wireCalendarControls();
-    loadOrdersFromLocal();
-    setViewToToday();
-    renderTables();
+    // FINAL init for planner page after Supabase confirms the user is logged in
+    protectPlannerPage().then(async (allowed) => {
+        if (!allowed) return;
+
+        wireCalendarControls();
+        await loadOrdersFromSupabase();
+        setViewToToday();
+        renderTables();
+    });
 });
