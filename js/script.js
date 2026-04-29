@@ -1,22 +1,5 @@
-// Supabase setup
-const SUPABASE_URL = "https://zsohiwpwfeburwcilhpk.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpzb2hpd3B3ZmVidXJ3Y2lsaHBrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0NzEwNDYsImV4cCI6MjA5MzA0NzA0Nn0.zu_E75L4aa-Wc_1G6Y3NNDQ3bx4BqHj7FHyjEG7tVLY";
+// The Rose Room Planner main logic
 
-const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-function getInputValue(possibleIds, possibleNames) {
-    for (const id of possibleIds) {
-        const el = document.getElementById(id);
-        if (el && typeof el.value === 'string') return el.value;
-    }
-    for (const name of possibleNames) {
-        const el = document.querySelector(`input[name="${name}"]`);
-        if (el && typeof el.value === 'string') return el.value;
-    }
-    return null;
-}
-
-// Run only after DOM is ready (fixes null elements + broken calendar/buttons when script loads in <head>)
 function onReady(fn) {
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', fn);
@@ -25,8 +8,20 @@ function onReady(fn) {
     }
 }
 
+function getSupabaseClient() {
+    if (!window.supabaseClient) {
+        console.error('Supabase client is missing. Make sure js/supabase.js loads before js/script.js.');
+        alert('Supabase is not connected. Check that supabase.js loads before script.js.');
+        return null;
+    }
+
+    return window.supabaseClient;
+}
+
 onReady(() => {
-    // Detect page by DOM instead of relying on filenames (works for file://, Live Server, renames, etc.)
+    const supabaseClient = getSupabaseClient();
+    if (!supabaseClient) return;
+
     const hasPlannerUI = !!(
         document.getElementById('monthCalendar') ||
         document.getElementById('calendarMonthLabel') ||
@@ -34,16 +29,18 @@ onReady(() => {
         document.getElementById('orderModal') ||
         document.getElementById('orderForm')
     );
+
     const hasLoginUI = !!document.getElementById('loginForm');
 
     const isPlanner = hasPlannerUI;
     const isLogin = hasLoginUI && !hasPlannerUI;
 
-    // --- Login Logic ---
+    // -----------------------------
+    // Login Page Logic
+    // -----------------------------
     if (isLogin) {
         const loginForm = document.getElementById('loginForm');
 
-        // If already logged in, send to planner
         supabaseClient.auth.getSession().then(({ data }) => {
             if (data.session) {
                 window.location.href = 'planner.html';
@@ -69,12 +66,14 @@ onReady(() => {
 
                 if (error) {
                     const err = document.getElementById('error-msg');
+
                     if (err) {
                         err.textContent = 'Invalid email or password';
                         err.classList.remove('hidden');
                     } else {
                         alert('Invalid email or password');
                     }
+
                     return;
                 }
 
@@ -84,13 +83,14 @@ onReady(() => {
             });
         }
 
-        return; // stop here on login page
+        return;
     }
 
-    // --- Planner Logic ---
+    // -----------------------------
+    // Planner Page Logic
+    // -----------------------------
     if (!isPlanner) return;
 
-    // Real Supabase Auth Check
     async function protectPlannerPage() {
         const { data, error } = await supabaseClient.auth.getSession();
 
@@ -102,7 +102,6 @@ onReady(() => {
         return true;
     }
 
-    // Logout Logic
     const logoutBtn = document.getElementById('logoutBtn');
 
     if (logoutBtn) {
@@ -112,10 +111,11 @@ onReady(() => {
         });
     }
 
-    // State
     let orders = [];
 
-    // --- Supabase cloud storage ---
+    // -----------------------------
+    // Supabase Order Storage
+    // -----------------------------
     function mapSupabaseOrder(o) {
         return {
             id: o.id,
@@ -140,7 +140,7 @@ onReady(() => {
 
         if (error) {
             console.error('Error loading orders:', error);
-            alert('Could not load orders. Check Supabase table/policies.');
+            alert(`Could not load orders: ${error.message}`);
             orders = [];
             return;
         }
@@ -149,7 +149,10 @@ onReady(() => {
             .map(mapSupabaseOrder)
             .filter(o => o.date);
 
-        orders.sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.id).localeCompare(String(b.id)));
+        orders.sort((a, b) => {
+            return String(a.date).localeCompare(String(b.date)) ||
+                String(a.id).localeCompare(String(b.id));
+        });
     }
 
     async function saveOrderToSupabase(order) {
@@ -206,47 +209,13 @@ onReady(() => {
         return data;
     }
 
-    // Render Tables
-    function renderTables() {
-        const upcomingBody = document.getElementById('upcomingTableBody');
-        const pastBody = document.getElementById('pastTableBody');
-        const today = toISODate(new Date());
-
-        if (!upcomingBody || !pastBody) return;
-
-        upcomingBody.innerHTML = '';
-        pastBody.innerHTML = '';
-
-        orders.forEach((o, index) => {
-            const row = `
-                <tr>
-                    <td>${o.date}</td>
-                    <td><strong>${o.client}</strong></td>
-                    <td>${o.size} roses — ${o.details}</td>
-                    <td>${o.type}</td>
-                    <td>$${o.total}</td>
-                    <td style="color:${o.due > 0 ? 'red' : 'green'}">${o.due > 0 ? '$' + o.due + ' Due' : 'Paid'}</td>
-                    <td><button class="btn-edit" onclick="openModal(${index})">Edit</button></td>
-                </tr>
-            `;
-
-            if (o.date >= today) {
-                upcomingBody.innerHTML += row;
-            } else {
-                pastBody.innerHTML += row;
-            }
-        });
-    }
-
-    // ---- Monthly Calendar (Advanced) ----
+    // -----------------------------
+    // Date Helpers
+    // -----------------------------
     const monthNames = [
-        'January','February','March','April','May','June',
-        'July','August','September','October','November','December'
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
     ];
-
-    let viewYear = new Date().getFullYear();
-    let viewMonth = new Date().getMonth(); // 0-11
-    let selectedDateStr = toISODate(new Date());
 
     function pad2(n) {
         return String(n).padStart(2, '0');
@@ -276,22 +245,70 @@ onReady(() => {
         return orders.filter(o => o.date === iso);
     }
 
+    // -----------------------------
+    // Tables
+    // -----------------------------
+    function renderTables() {
+        const upcomingBody = document.getElementById('upcomingTableBody');
+        const pastBody = document.getElementById('pastTableBody');
+        const today = toISODate(new Date());
+
+        if (!upcomingBody || !pastBody) return;
+
+        upcomingBody.innerHTML = '';
+        pastBody.innerHTML = '';
+
+        orders.forEach((o, index) => {
+            const dueDisplay = Number(o.due) > 0
+                ? `$${Number(o.due).toFixed(2)} Due`
+                : 'Paid';
+
+            const row = `
+                <tr>
+                    <td>${o.date}</td>
+                    <td><strong>${o.client}</strong></td>
+                    <td>${o.size} roses — ${o.details}</td>
+                    <td>${o.type}</td>
+                    <td>$${Number(o.total).toFixed(2)}</td>
+                    <td style="color:${Number(o.due) > 0 ? 'red' : 'green'}">${dueDisplay}</td>
+                    <td><button class="btn-edit" onclick="openModal(${index})">Edit</button></td>
+                </tr>
+            `;
+
+            if (o.date >= today) {
+                upcomingBody.innerHTML += row;
+            } else {
+                pastBody.innerHTML += row;
+            }
+        });
+    }
+
+    // -----------------------------
+    // Calendar
+    // -----------------------------
+    let viewYear = new Date().getFullYear();
+    let viewMonth = new Date().getMonth();
+    let selectedDateStr = toISODate(new Date());
+
     function getMonthGrid(year, monthIndex) {
         const firstOfMonth = new Date(year, monthIndex, 1);
-        const startDay = firstOfMonth.getDay(); // 0=Sun
+        const startDay = firstOfMonth.getDay();
         const gridStart = new Date(year, monthIndex, 1 - startDay);
 
         const cells = [];
+
         for (let i = 0; i < 42; i++) {
             const d = new Date(gridStart);
             d.setDate(gridStart.getDate() + i);
+
             cells.push({
                 date: d,
                 iso: toISODate(d),
                 dayNum: d.getDate(),
-                isOutside: d.getMonth() !== monthIndex,
+                isOutside: d.getMonth() !== monthIndex
             });
         }
+
         return cells;
     }
 
@@ -303,6 +320,7 @@ onReady(() => {
         if (!labelEl || !countEl || !listEl) return;
 
         const dayOrders = getOrdersForDate(iso);
+
         labelEl.textContent = formatDisplayDate(iso);
         countEl.textContent = `${dayOrders.length} ${dayOrders.length === 1 ? 'order' : 'orders'}`;
 
@@ -311,37 +329,39 @@ onReady(() => {
             return;
         }
 
-        listEl.innerHTML = dayOrders
-            .map((o) => {
-                const paidStatus = (Number(o.due) > 0)
-                    ? `<span class="badge">$${Number(o.due).toFixed(2)} due</span>`
-                    : `<span class="badge">Paid</span>`;
+        listEl.innerHTML = dayOrders.map((o) => {
+            const paidStatus = Number(o.due) > 0
+                ? `<span class="badge">$${Number(o.due).toFixed(2)} due</span>`
+                : `<span class="badge">Paid</span>`;
 
-                return `
-                    <div class="order-item">
-                        <div>
-                            <strong>${o.client}</strong>
-                            <div class="order-sub">${o.size} roses — ${o.details}</div>
-                            <div class="order-sub">Type: ${o.type} • Total: $${Number(o.total).toFixed(2)} • Paid: $${Number(o.paid).toFixed(2)}</div>
+            return `
+                <div class="order-item">
+                    <div>
+                        <strong>${o.client}</strong>
+                        <div class="order-sub">${o.size} roses — ${o.details}</div>
+                        <div class="order-sub">
+                            Type: ${o.type} • Total: $${Number(o.total).toFixed(2)} • Paid: $${Number(o.paid).toFixed(2)}
                         </div>
-                        <div>${paidStatus}</div>
                     </div>
-                `;
-            })
-            .join('');
+                    <div>${paidStatus}</div>
+                </div>
+            `;
+        }).join('');
     }
 
     function renderCalendar() {
         const monthLabel = document.getElementById('calendarMonthLabel');
         const gridEl = document.getElementById('monthCalendar');
+
         if (!monthLabel || !gridEl) return;
 
         const todayISO = toISODate(new Date());
 
         monthLabel.textContent = `${monthNames[viewMonth]} ${viewYear}`;
-        const cells = getMonthGrid(viewYear, viewMonth);
 
+        const cells = getMonthGrid(viewYear, viewMonth);
         gridEl.innerHTML = '';
+
         const fragment = document.createDocumentFragment();
 
         cells.forEach((cell) => {
@@ -365,7 +385,12 @@ onReady(() => {
             el.innerHTML = `
                 <div class="day-num">${cell.dayNum}</div>
                 <div class="day-meta">
-                    <div class="order-count">${count > 0 ? `<span class="badge">${count}</span> Orders` : `<span class="badge" style="opacity:.35">0</span> Orders`}</div>
+                    <div class="order-count">
+                        ${count > 0
+                            ? `<span class="badge">${count}</span> Orders`
+                            : `<span class="badge" style="opacity:.35">0</span> Orders`
+                        }
+                    </div>
                     <div class="client-preview">${previewText}</div>
                 </div>
             `;
@@ -385,9 +410,11 @@ onReady(() => {
 
     function setViewToToday() {
         const now = new Date();
+
         viewYear = now.getFullYear();
         viewMonth = now.getMonth();
         selectedDateStr = toISODate(now);
+
         renderCalendar();
     }
 
@@ -399,10 +426,12 @@ onReady(() => {
         if (prevBtn) {
             prevBtn.addEventListener('click', () => {
                 viewMonth -= 1;
+
                 if (viewMonth < 0) {
                     viewMonth = 11;
                     viewYear -= 1;
                 }
+
                 renderCalendar();
             });
         }
@@ -410,10 +439,12 @@ onReady(() => {
         if (nextBtn) {
             nextBtn.addEventListener('click', () => {
                 viewMonth += 1;
+
                 if (viewMonth > 11) {
                     viewMonth = 0;
                     viewYear += 1;
                 }
+
                 renderCalendar();
             });
         }
@@ -425,18 +456,23 @@ onReady(() => {
         }
     }
 
-    // Modal Functions
-    window.openModal = function(editIndex = null) {
+    // -----------------------------
+    // Modal
+    // -----------------------------
+    window.openModal = function (editIndex = null) {
         const modal = document.getElementById('orderModal');
         const form = document.getElementById('orderForm');
+
         if (!modal || !form) return;
+
         modal.classList.remove('hidden');
         document.body.classList.add('modal-open');
 
         if (editIndex !== null) {
-            document.getElementById('modalTitle').innerText = "Edit Order";
-            document.getElementById('editIndex').value = editIndex;
             const o = orders[editIndex];
+
+            document.getElementById('modalTitle').innerText = 'Edit Order';
+            document.getElementById('editIndex').value = editIndex;
 
             document.getElementById('clientName').value = o.client;
             document.getElementById('orderDate').value = o.date;
@@ -445,26 +481,30 @@ onReady(() => {
             document.getElementById('bouquetDetails').value = o.details;
             document.getElementById('totalPrice').value = o.total;
             document.getElementById('paidPrice').value = o.paid;
+
             calcRemaining();
         } else {
-            document.getElementById('modalTitle').innerText = "Add New Order";
-            document.getElementById('editIndex').value = "";
+            document.getElementById('modalTitle').innerText = 'Add New Order';
+            document.getElementById('editIndex').value = '';
             form.reset();
+            document.getElementById('amountLeft').value = '';
         }
     };
 
     window.closeModal = function () {
         const modal = document.getElementById('orderModal');
+        const form = document.getElementById('orderForm');
+
         if (!modal) return;
 
         modal.classList.add('hidden');
         document.body.classList.remove('modal-open');
 
-        const form = document.getElementById('orderForm');
         if (form) form.reset();
     };
 
     const modal = document.getElementById('orderModal');
+
     if (modal) {
         modal.addEventListener('click', (e) => {
             if (e.target === modal) {
@@ -473,50 +513,29 @@ onReady(() => {
         });
     }
 
-    window.calcRemaining = function() {
+    window.calcRemaining = function () {
         const total = parseFloat(document.getElementById('totalPrice').value) || 0;
         const paid = parseFloat(document.getElementById('paidPrice').value) || 0;
+
         document.getElementById('amountLeft').value = (total - paid).toFixed(2);
     };
 
+    // -----------------------------
+    // Save Order Form
+    // -----------------------------
     const orderForm = document.getElementById('orderForm');
 
-    // Mobile fix: if the Save button isn't a real submit button (type="button"), the form submit handler won't fire.
-    // Force a submit on click so iPhone/Android always save.
     if (orderForm) {
-        const saveBtn =
-            document.getElementById('saveOrderBtn') ||
-            document.getElementById('saveOrder') ||
-            orderForm.querySelector('button[type="submit"], input[type="submit"], button');
-
-        if (saveBtn) {
-            saveBtn.addEventListener('click', (ev) => {
-                const btnType = (saveBtn.getAttribute('type') || '').toLowerCase();
-
-                // Normal submit buttons already trigger the form submit event.
-                // Only force-submit if the button is explicitly NOT a submit button.
-                if (btnType && btnType !== 'submit') {
-                    ev.preventDefault();
-
-                    if (typeof orderForm.requestSubmit === 'function') {
-                        orderForm.requestSubmit();
-                    } else {
-                        orderForm.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-                    }
-                }
-            });
-        }
-
         orderForm.addEventListener('submit', async (e) => {
             e.preventDefault();
+
             console.log('Submit fired');
 
             const editIdxRaw = document.getElementById('editIndex').value;
-            const isEdit = editIdxRaw !== "";
+            const isEdit = editIdxRaw !== '';
             const editIdx = isEdit ? Number(editIdxRaw) : null;
 
-            // Preserve id/createdAt on edits
-            const existing = (isEdit && orders[editIdx]) ? orders[editIdx] : null;
+            const existing = isEdit && orders[editIdx] ? orders[editIdx] : null;
 
             const newOrder = {
                 id: existing?.id || null,
@@ -527,12 +546,16 @@ onReady(() => {
                 details: document.getElementById('bouquetDetails').value.trim(),
                 total: parseFloat(document.getElementById('totalPrice').value) || 0,
                 paid: parseFloat(document.getElementById('paidPrice').value) || 0,
-                due: parseFloat(document.getElementById('amountLeft').value) || 0,
-                createdAt: existing?.createdAt || "",
-                updatedAt: ""
+                due: parseFloat(document.getElementById('amountLeft').value) || 0
             };
 
+            if (!newOrder.client || !newOrder.date || !newOrder.size || !newOrder.type) {
+                alert('Please fill in the required order fields.');
+                return;
+            }
+
             console.log('Trying to save order:', newOrder);
+
             const savedOrder = await saveOrderToSupabase(newOrder);
 
             if (!savedOrder) return;
@@ -545,19 +568,16 @@ onReady(() => {
         });
     }
 
-    // FINAL init for planner page after Supabase confirms the user is logged in
+    // -----------------------------
+    // Final Page Init
+    // -----------------------------
     protectPlannerPage().then(async (allowed) => {
         if (!allowed) return;
 
         wireCalendarControls();
 
-        if (typeof loadOrdersFromSupabase !== 'function') {
-            console.error('loadOrdersFromSupabase is missing. Your browser is probably loading an old cached script.js file. Hard refresh the page or bump the script version in planner.html.');
-            alert('The planner loaded an old cached script file. Hard refresh the page, then try again.');
-            return;
-        }
-
         await loadOrdersFromSupabase();
+
         setViewToToday();
         renderTables();
     });
