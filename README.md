@@ -1,87 +1,102 @@
-# 🌹 The Rose Room — Order Planner Dashboard
+# 🌹 The Rose Room Planner
 
-A modern web-based order tracking and planning dashboard built for a floral business.  
-Designed to help manage client orders, payments, and delivery dates through an interactive calendar interface.
+A private order-planning dashboard for **Roses by Aikam**.
 
----
+The planner is hosted on:
 
-## ✨ Features
+```txt
 
-### 🔐 Login System
-- Username/password protected access
-- Planner page redirects if user is not logged in
-- Session-based login (browser session)
+rosesbyaikam.com
+This domain is used for the internal planner only. The public business website is hosted separately.
 
----
+⸻
 
-### 📅 Advanced Order Calendar
-- Monthly calendar view
-- Automatically highlights:
-  - **Today’s date**
-  - Days that contain orders
-- Calendar updates automatically every day
-- Navigate:
-  - Previous month
-  - Next month
-  - Jump back to today
-- View both **past and future months**
+Features
 
----
+* Secure email/password login using Supabase Auth
+* Protected planner dashboard
+* Monthly order calendar
+* Add and edit rose bouquet orders
+* Track client name, date, rose count, pickup/delivery, details, total price, paid amount, and amount due
+* View upcoming and past orders
+* Save order data online using Supabase
+* Mobile-friendly pink glassmorphism design
 
-### 🧾 Order Management
-- Add new orders
-- Edit existing orders
-- Track:
-  - Client name
-  - Order date
-  - Bouquet size
-  - Order type
-  - Custom details
-  - Total price
-  - Paid amount
-  - Remaining balance
+⸻
 
----
+Tech Stack
 
-### 📊 Smart Order Display
-- Orders are stored locally in the browser
-- Automatically separated into:
-  - **Upcoming Orders**
-  - **Past Orders**
-- Calendar shows:
-  - Number of orders per day
-  - Client name preview
-- Clicking a calendar date shows full order details for that day
+* HTML
+* CSS
+* Vanilla JavaScript
+* Supabase Auth
+* Supabase PostgreSQL
+* GitHub Pages / static hosting
 
----
+No React, npm, or build tools are required.
 
-### 💾 Persistent Storage
-- Orders are saved using **localStorage**
-- Data remains after:
-  - Page refresh
-  - Browser restart
-- No data loss unless browser storage is cleared
+⸻
 
----
+Project Structure
+the-rose-room-planner/
+├── index.html
+├── planner.html
+├── CNAME
+├── README.md
+├── css/
+│   └── style.css
+└── js/
+    ├── supabase.js
+    └── script.js
 
-### 🎨 UI & Design
-- Glassmorphism design
-- Soft pink theme customized for floral branding
-- Fully responsive (desktop & mobile)
-- Clean modern layout
+⸻
 
----
+Main Files
 
-## 🛠️ Built With
+index.html
 
-- **HTML5**
-- **CSS3**
-- **Vanilla JavaScript**
-- **LocalStorage API**
-- **GitHub Pages compatible**
+Login page for the planner.
 
-No frameworks. No dependencies. Fast loading.
+planner.html
 
----
+Protected dashboard with the order calendar, order tables, logout button, and add/edit order modal.
 
-## 📂 Project Structure
+css/style.css
+
+Main styling file for the pink glassmorphism design and mobile layout.
+
+js/supabase.js
+
+Creates the Supabase client using the project URL and anon public key.
+
+Never place the Supabase service_role key in this file.
+
+js/script.js
+
+Handles login, logout, auth checking, order saving, order loading, calendar rendering, and modal actions.
+
+⸻
+
+Supabase Backend
+
+Orders are saved in a Supabase table called orders.
+
+Main fields:
+
+* id
+* user_id
+* client
+* date
+* size
+* type
+* details
+* total
+* paid
+* due
+* created_at
+* updated_at
+
+Each order is connected to the logged-in user through user_id.
+
+Row Level Security is enabled so users can only view, add, update, or delete their own orders.
+
