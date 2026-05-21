@@ -5,6 +5,7 @@ A private order-planning dashboard for **Roses by Aikam**.
 The planner is hosted on:
 
 rosesbyaikam.com
+
 This domain is used for the internal planner only. The public business website is hosted separately.
 
 ⸻
