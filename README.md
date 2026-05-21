@@ -6,7 +6,8 @@ The planner is hosted on:
 
 rosesbyaikam.com
 
-This domain is used for the internal planner only. The public business website is hosted separately.
+This domain is used for the internal planner only. The public business website is hosted separately on:
+theroseroom.art
 
 ⸻
 
