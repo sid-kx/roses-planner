@@ -4,8 +4,6 @@ A private order-planning dashboard for **Roses by Aikam**.
 
 The planner is hosted on:
 
-```txt
-
 rosesbyaikam.com
 This domain is used for the internal planner only. The public business website is hosted separately.
 
@@ -99,4 +97,3 @@ Main fields:
 Each order is connected to the logged-in user through user_id.
 
 Row Level Security is enabled so users can only view, add, update, or delete their own orders.
-
