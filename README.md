@@ -32,48 +32,6 @@ Tech Stack
 * Supabase PostgreSQL
 * GitHub Pages / static hosting
 
-No React, npm, or build tools are required.
-
-⸻
-
-Project Structure
-the-rose-room-planner/
-├── index.html
-├── planner.html
-├── CNAME
-├── README.md
-├── css/
-│   └── style.css
-└── js/
-    ├── supabase.js
-    └── script.js
-
-⸻
-
-Main Files
-
-index.html
-
-Login page for the planner.
-
-planner.html
-
-Protected dashboard with the order calendar, order tables, logout button, and add/edit order modal.
-
-css/style.css
-
-Main styling file for the pink glassmorphism design and mobile layout.
-
-js/supabase.js
-
-Creates the Supabase client using the project URL and anon public key.
-
-Never place the Supabase service_role key in this file.
-
-js/script.js
-
-Handles login, logout, auth checking, order saving, order loading, calendar rendering, and modal actions.
-
 ⸻
 
 Supabase Backend
